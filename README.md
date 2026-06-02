@@ -5,8 +5,9 @@ MedMKP is an early B2B medical-supply marketplace prototype for PT, chiro, and r
 The MVP currently runs as a dependency-free browser app:
 
 - Buyer marketplace with category search, offer comparison, best-match scoring, and draft buy orders.
-- Seller workspace with offer, stock, delivery, and catalog-review status.
-- Admin catalog operations queue for product normalization.
+- Buyer needs upload and concierge request language.
+- Seller workspace with catalog upload, offer, stock, delivery, and catalog-review status.
+- Admin catalog operations queue for supplier vetting and product normalization.
 - Local cart persistence via `localStorage`.
 - Visual direction based on the supplied MedMKP Figma export: white procurement dashboard, blue brand accent, compact cards, and operational status tables.
 
@@ -22,6 +23,8 @@ Then visit `http://localhost:5173`.
 
 ## Product Direction
 
+See [PRODUCT_BRIEF.md](./PRODUCT_BRIEF.md) for the current Sean-notes product brief.
+
 The key marketplace rule is to separate canonical products from seller offers:
 
 ```text
@@ -34,7 +37,8 @@ That lets buyers compare price, stock, delivery time, seller trust, and complian
 
 1. Add real buyer and seller organization auth.
 2. Move mock data into Postgres.
-3. Add seller offer intake.
-4. Add admin catalog approval persistence.
-5. Replace local cart with real buy order creation.
-6. Add Stripe Connect seller onboarding and payout records.
+3. Add buyer upload intake for invoices, reorder lists, catalogs, and free-form needs.
+4. Add supplier catalog/SKU upload and parsing.
+5. Add admin supplier vetting and catalog approval persistence.
+6. Replace local cart with real concierge request creation.
+7. Add Stripe ACH / Stripe Connect commission tracking.

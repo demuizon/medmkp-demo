@@ -33,7 +33,7 @@
           </button>
         </nav>
 
-        <button class="upload-button" title="Upload invoice">⇧ Upload Invoice</button>
+        <button class="upload-button" title="Upload needs">⇧ Upload Needs</button>
 
         <div class="org-panel">
           <div class="avatar">AK</div>
@@ -64,9 +64,9 @@
           <div class="section-heading first">
             <div>
               <h2 id="viewTitle">Find the best clinical supplies</h2>
-              <p>Compare vetted supplier offers and draft cleaner buy orders.</p>
+              <p>Upload needs or search supplies, then compare vetted supplier offers by value.</p>
             </div>
-            <button class="primary-action compact">+ New Request</button>
+            <button class="primary-action compact">⇧ Upload Needs</button>
           </div>
           <div class="buyer-layout">
             <section class="market-column">
@@ -118,7 +118,7 @@
                 </div>
                 <span id="approvalState">Ready</span>
               </div>
-              <button class="primary-action" id="submitOrder">Submit buy order</button>
+              <button class="primary-action" id="submitOrder">Submit concierge request</button>
             </aside>
           </div>
         </section>
@@ -127,9 +127,9 @@
           <div class="section-heading">
             <div>
               <h2 id="sellerHeading">Manage offers and fulfillment</h2>
-              <p>Monitor active offers, delivery promises, and catalog review status.</p>
+              <p>Upload catalogs, publish SKUs, and keep delivery promises current.</p>
             </div>
-            <button class="primary-action compact" id="addOffer">Add offer</button>
+            <button class="primary-action compact" id="addOffer">⇧ Upload Catalog</button>
           </div>
           <div class="seller-grid">
             <div class="metric-band">
@@ -158,28 +158,28 @@
         <section class="view" id="adminView" aria-labelledby="adminHeading">
           <div class="section-heading">
             <div>
-              <h2 id="adminHeading">Normalize products before they go live</h2>
-              <p>Keep seller SKUs mapped to canonical products so buyers can compare cleanly.</p>
+              <h2 id="adminHeading">Vet suppliers and normalize products</h2>
+              <p>Map uploaded catalogs to canonical products and verify EINs, certifications, and supplier reliability.</p>
             </div>
             <button class="secondary-action" id="approveAll">Approve clean matches</button>
           </div>
           <div class="admin-layout">
             <div class="queue-list" id="adminQueue"></div>
             <div class="ops-panel">
-              <p class="eyebrow">Marketplace Rule</p>
+              <p class="eyebrow">Core Wedge</p>
               <h3>Canonical product first</h3>
               <p>
-                Buyers compare offers against one normalized product record. Sellers own price,
-                stock, delivery promises, and compliance documents.
+                Buyers compare price, inventory, shipping estimate, item reliability, and acceptable
+                alternatives against one normalized product record.
               </p>
               <div class="flow-diagram">
-                <span>Seller SKU</span>
+                <span>Catalog Upload</span>
                 <span>→</span>
                 <span>Canonical Product</span>
                 <span>→</span>
-                <span>Comparable Offer</span>
+                <span>Best Value Match</span>
                 <span>→</span>
-                <span>Buy Order</span>
+                <span>Concierge Request</span>
               </div>
             </div>
           </div>
