@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
+const PROCESSING_DURATION_MS = 3000;
+
 const suppliers = [
   { name: "Rehab Supply Co.", signal: "EIN verified · PT catalog · 97% on-time" },
   { name: "Clinical Direct", signal: "ACH ready · 2-day Southeast lanes" },
@@ -34,6 +36,10 @@ function sumSelected(lineItems) {
 
 function sumPrevious(lineItems) {
   return lineItems.reduce((total, item) => total + item.oldUnitPrice * item.qty, 0);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function IconSprite() {
@@ -121,6 +127,7 @@ export default function Home() {
   const [orderStep, setOrderStep] = useState(1);
   const [toast, setToast] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [isDraggingInvoice, setIsDraggingInvoice] = useState(false);
   const [selectedInvoiceName, setSelectedInvoiceName] = useState("");
   const [hasUploadedInvoice, setHasUploadedInvoice] = useState(false);
@@ -149,6 +156,28 @@ export default function Home() {
         setCatalogSource("unavailable");
       });
   }, []);
+
+  useEffect(() => {
+    if (!uploading) {
+      setUploadProgress(0);
+      return undefined;
+    }
+
+    setUploadProgress(12);
+    const steps = [
+      [600, 34],
+      [1300, 62],
+      [2200, 88],
+      [2950, 100],
+    ];
+    const timers = steps.map(([delay, progress]) => {
+      return window.setTimeout(() => setUploadProgress(progress), delay);
+    });
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [uploading]);
 
   const selectedRequest = useMemo(() => {
     return requests.find((request) => request.id === selectedRequestId) || requests[0];
@@ -213,14 +242,15 @@ export default function Home() {
     const formData = new FormData(event.currentTarget);
 
     setUploading(true);
+    const startedAt = Date.now();
     const response = await fetch("/api/requests", {
       method: "POST",
       body: formData,
     });
-
-    setUploading(false);
+    await wait(Math.max(PROCESSING_DURATION_MS - (Date.now() - startedAt), 0));
 
     if (!response.ok) {
+      setUploading(false);
       const body = await response.json().catch(() => ({}));
       showToast(body.error || "Upload failed");
       return;
@@ -231,6 +261,7 @@ export default function Home() {
     setSelectedRequestId(request.id);
     setHasUploadedInvoice(true);
     setOrderStep(1);
+    setUploading(false);
     showToast("Invoice saved and converted into a draft reorder");
     setView("order");
   }
@@ -402,6 +433,12 @@ export default function Home() {
                   <div className="upload-icon"><Icon name="icon-cloud-upload" /></div>
                   <h3>{uploading ? "Processing invoice..." : isDraggingInvoice ? "Drop PDF invoice" : "Drop PDF invoice here"}</h3>
                   <p>{selectedInvoiceName || "or click to choose a file"}</p>
+                  {uploading && (
+                    <div className="processing-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={uploadProgress}>
+                      <div style={{ width: `${uploadProgress}%` }}></div>
+                      <span>{uploadProgress < 45 ? "Reading PDF" : uploadProgress < 80 ? "Matching products" : "Building draft order"}</span>
+                    </div>
+                  )}
                   <input
                     className="file-input"
                     data-testid="invoice-file-input"

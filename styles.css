@@ -605,6 +605,37 @@ kbd {
   line-height: 1.6;
 }
 
+.processing-progress {
+  display: grid;
+  gap: 8px;
+  width: min(360px, 100%);
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.processing-progress::before {
+  content: "";
+  display: block;
+  grid-row: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: #dbe6ff;
+}
+
+.processing-progress div {
+  grid-row: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--blue);
+  transition: width 420ms ease;
+}
+
+.processing-progress span {
+  display: block;
+}
+
 .upload-icon {
   display: grid;
   width: 76px;
