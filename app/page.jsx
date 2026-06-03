@@ -13,7 +13,9 @@ const suppliers = [
 ];
 
 const orderSteps = [
-  { label: "Approved", detail: "Buyer approved quote" },
+  { label: "Invoice uploaded", detail: "Buyer sent current supplier invoice" },
+  { label: "Draft order", detail: "Line items normalized for reorder" },
+  { label: "Buyer review", detail: "Clinic confirms quantities and substitutions" },
   { label: "PO sent", detail: "Supplier orders placed" },
   { label: "Supplier confirmed", detail: "Awaiting confirmations" },
   { label: "Shipped", detail: "Tracking pending" },
@@ -81,6 +83,12 @@ function IconSprite() {
         <path d="M8 18.5H6.8a4.3 4.3 0 0 1-.8-8.5 6 6 0 0 1 11.4-1.8A4.8 4.8 0 0 1 18 18.5h-2" />
         <path d="M12 19V11" />
         <path d="m8.5 14.5 3.5-3.5 3.5 3.5" />
+      </symbol>
+      <symbol id="icon-store" viewBox="0 0 24 24">
+        <path d="M4 10.5h16l-1.5-6h-13L4 10.5Z" />
+        <path d="M5.5 10.5V20h13v-9.5" />
+        <path d="M9 20v-5.5h6V20" />
+        <path d="M4 10.5c.4 1.4 1.4 2.1 2.8 2.1s2.4-.7 2.8-2.1c.4 1.4 1.4 2.1 2.8 2.1s2.4-.7 2.8-2.1c.4 1.4 1.4 2.1 2.8 2.1s2.4-.7 2.8-2.1" />
       </symbol>
     </svg>
   );
@@ -194,20 +202,16 @@ export default function Home() {
     const { request } = await response.json();
     setRequests((current) => [request, ...current]);
     setSelectedRequestId(request.id);
-    showToast("Invoice saved and parsed into 6 normalized line items");
-    setView("admin");
+    setOrderStep(1);
+    showToast("Invoice saved and converted into a draft reorder");
+    setView("order");
   }
 
   const navItems = [
     ["landing", "icon-home", "Dashboard"],
+    ["upload", "icon-cloud-upload", "Upload Invoice"],
     ["catalog", "icon-search", "Catalog"],
-    ["upload", "icon-file-plus", "Requests"],
-    ["quote", "icon-file-text", "Quotes"],
     ["order", "icon-clipboard", "Orders"],
-    ["admin", "icon-package", "Suppliers"],
-    ["approval", "icon-users", "Buyers"],
-    ["admin", "icon-chart", "Analytics"],
-    ["landing", "icon-settings", "Settings"],
   ];
 
   return (
@@ -271,7 +275,10 @@ export default function Home() {
             )}
             <div className="topbar-actions">
               <button className="secondary-action compact" onClick={() => setView("catalog")}>Catalog</button>
-              <button className="secondary-action compact" onClick={() => setView("admin")}>Admin Queue</button>
+              <button className="secondary-action compact" onClick={() => setView("supplier")}>
+                <Icon name="icon-store" className="button-icon" />
+                For Suppliers
+              </button>
               <button className="primary-action compact" data-testid="topbar-new-upload" onClick={() => setView("upload")}>New Upload</button>
             </div>
           </section>
@@ -280,51 +287,51 @@ export default function Home() {
             <section className="view active" aria-labelledby="landingHeading">
               <div className="hero-grid">
                 <div className="hero-copy">
-                  <p className="pill">Concierge procurement for healthcare</p>
-                  <h2 id="landingHeading">Upload your invoice. Get a better reorder quote.</h2>
+                  <p className="pill">Buyer portal for clinics</p>
+                  <h2 id="landingHeading">Upload an invoice. Turn it into a reorder.</h2>
                   <p>
-                    MedMKP extracts messy medical supply needs, compares vetted suppliers,
-                    and returns a clean quote chart for PT, chiro, and rehab offices.
+                    MedMKP helps PT, chiro, and rehab offices reorder medical supplies
+                    from a PDF invoice without rebuilding carts line by line.
                   </p>
                   <div className="hero-actions">
                     <button className="primary-action compact" onClick={() => setView("upload")}>
                       <Icon name="icon-cloud-upload" className="button-icon" />
                       Upload Invoice
                     </button>
-                    <button className="secondary-action compact" onClick={() => setView("quote")}>See Quote Builder</button>
+                    <button className="secondary-action compact" onClick={() => setView("order")}>View Draft Order</button>
                   </div>
                   <div className="trust-row">
-                    <span>Secure intake</span>
-                    <span>Supplier RFQs</span>
-                    <span>Best-value picks</span>
+                    <span>PDF invoice intake</span>
+                    <span>Canonical product matching</span>
+                    <span>Buyer review before order</span>
                   </div>
                 </div>
                 <div className="demo-card">
                   <div className="panel-header">
                     <div>
-                      <p className="eyebrow">Recent Quote</p>
+                      <p className="eyebrow">Draft Reorder</p>
                       <h3>{selectedRequest?.clinic || "Northline Rehab"} May reorder</h3>
                     </div>
-                    <span className="status-chip success">18% lower</span>
+                    <span className="status-chip success">Ready to review</span>
                   </div>
                   <div className="mini-stats">
                     <div><strong>{lineItems.length || 6}</strong><span>line items</span></div>
-                    <div><strong>5</strong><span>supplier RFQs</span></div>
-                    <div><strong>{money.format(savings || 842).replace(".00", "")}</strong><span>projected savings</span></div>
+                    <div><strong>10</strong><span>buyer categories</span></div>
+                    <div><strong>{money.format(quoteTotal || 3958).replace(".00", "")}</strong><span>draft total</span></div>
                   </div>
                   <div className="quote-mini-list">
-                    <div><span>Resistance bands</span><strong>Best value found</strong></div>
-                    <div><span>Reusable electrodes</span><strong>Exact brand match</strong></div>
-                    <div><span>Table paper</span><strong>2-day delivery</strong></div>
+                    <div><span>Resistance bands</span><strong>Matched</strong></div>
+                    <div><span>Reusable electrodes</span><strong>Exact brand</strong></div>
+                    <div><span>Table paper</span><strong>Ready to reorder</strong></div>
                   </div>
                 </div>
               </div>
 
               <div className="flow-steps">
-                <div><strong>1</strong><span>Buyer uploads anything</span></div>
-                <div><strong>2</strong><span>Admin parses SKUs</span></div>
-                <div><strong>3</strong><span>Suppliers respond</span></div>
-                <div><strong>4</strong><span>Buyer approves</span></div>
+                <div><strong>1</strong><span>Clinic uploads PDF invoice</span></div>
+                <div><strong>2</strong><span>MedMKP extracts line items</span></div>
+                <div><strong>3</strong><span>Products are matched and grouped</span></div>
+                <div><strong>4</strong><span>Buyer reviews draft order</span></div>
               </div>
 
               <CatalogExplorer
@@ -351,18 +358,18 @@ export default function Home() {
               <div className="section-heading first">
                 <div>
                   <h2 id="uploadHeading">Upload invoice or reorder need</h2>
-                  <p>Accept messy buyer inputs: PDFs, CSV/XLSX, screenshots, forwarded emails, or back-office photos.</p>
+                  <p>Start with the buyer's easiest input: a PDF invoice from their current supplier.</p>
                 </div>
-                <button className="secondary-action compact" onClick={() => setView("admin")}>View Admin Parse</button>
+                <button className="secondary-action compact" onClick={() => setView("order")}>View Draft Order</button>
               </div>
 
               <form onSubmit={handleUpload} className="upload-layout">
                 <div className="upload-dropzone">
                   <div className="upload-icon"><Icon name="icon-cloud-upload" /></div>
-                  <h3>Upload a real invoice or reorder file</h3>
-                  <p>The file is saved locally and the first parser pass creates normalized demo line items for admin review.</p>
-                  <input className="file-input" data-testid="invoice-file-input" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg,.csv,.xlsx,.xls" required />
-                  <button className="primary-action compact" data-testid="save-parse-request" type="submit" disabled={uploading}>{uploading ? "Uploading..." : "Save & Parse Request"}</button>
+                  <h3>Upload a PDF invoice</h3>
+                  <p>The demo saves the file and turns it into normalized reorder line items for buyer review.</p>
+                  <input className="file-input" data-testid="invoice-file-input" name="file" type="file" accept=".pdf,application/pdf" required />
+                  <button className="primary-action compact" data-testid="save-parse-request" type="submit" disabled={uploading}>{uploading ? "Uploading..." : "Create Draft Order"}</button>
                 </div>
 
                 <div className="form-card">
@@ -550,8 +557,8 @@ export default function Home() {
             <section className="view active" aria-labelledby="orderHeading">
               <div className="section-heading first">
                 <div>
-                  <h2 id="orderHeading">Order status</h2>
-                  <p>Track the concierge order after buyer approval, including PO sent, supplier confirmation, shipment, and reminder.</p>
+                  <h2 id="orderHeading">Draft order</h2>
+                  <p>Review the invoice-derived reorder before committing. Quotes and RFQs can stay behind the scenes for now.</p>
                 </div>
                 <button className="secondary-action compact" onClick={() => setView("landing")}>Back to Start</button>
               </div>
@@ -560,11 +567,12 @@ export default function Home() {
                 <div className="status-card">
                   <div className="panel-header">
                     <div>
-                      <p className="eyebrow">Order #ORD-20481</p>
+                      <p className="eyebrow">Draft #D-20481</p>
                       <h3>{selectedRequest?.clinic || "Northline Rehab"} May reorder</h3>
                     </div>
                     <span className="status-chip success">{orderSteps[orderStep].label}</span>
                   </div>
+                  <ExtractedTable lineItems={lineItems} />
                   <div className="timeline">
                     {orderSteps.map((step, index) => (
                       <div className={`timeline-step ${index <= orderStep ? "done" : "pending"}`} key={step.label}>
@@ -580,13 +588,39 @@ export default function Home() {
                 <aside className="decision-panel">
                   <div className="panel-header">
                     <div>
-                      <p className="eyebrow">Reorder Reminder</p>
-                      <h3>30 days</h3>
+                      <p className="eyebrow">Buyer Action</p>
+                      <h3>{money.format(quoteTotal || 0)}</h3>
                     </div>
                   </div>
-                  <p className="side-copy">MedMKP will remind Alex before therapy bands, electrodes, and table paper are likely to run out.</p>
-                  <button className="primary-action" onClick={() => { const nextStep = Math.min(orderStep + 1, orderSteps.length - 1); setOrderStep(nextStep); showToast(`Order moved to ${orderSteps[nextStep].label}`); }}>Advance Status</button>
+                  <p className="side-copy">Confirm quantities and substitutions, then MedMKP can place the order with the best available supplier path.</p>
+                  <button className="primary-action" onClick={() => { const nextStep = Math.min(orderStep + 1, orderSteps.length - 1); setOrderStep(nextStep); showToast(`Order moved to ${orderSteps[nextStep].label}`); }}>Approve Draft Order</button>
                 </aside>
+              </div>
+            </section>
+          )}
+
+          {view === "supplier" && (
+            <section className="view active" aria-labelledby="supplierHeading">
+              <div className="supplier-landing">
+                <p className="pill">For Suppliers</p>
+                <h2 id="supplierHeading">Sell into PT, chiro, and rehab clinics through MedMKP.</h2>
+                <p>
+                  Supplier onboarding is coming next. For now, this portal will support catalog uploads,
+                  compliance review, storefront setup, inventory updates, and order fulfillment.
+                </p>
+                <div className="supplier-actions">
+                  <button className="primary-action compact" onClick={() => showToast("Supplier login coming soon")}>
+                    Supplier Login
+                  </button>
+                  <button className="secondary-action compact" onClick={() => setView("landing")}>
+                    Back to Buyer Portal
+                  </button>
+                </div>
+                <div className="supplier-feature-grid">
+                  <div><Icon name="icon-cloud-upload" className="button-icon" /><strong>Catalog upload</strong><span>CSV, PDF, or portal-assisted SKU intake.</span></div>
+                  <div><Icon name="icon-package" className="button-icon" /><strong>Storefront setup</strong><span>Supplier profile, EIN, certifications, and service lanes.</span></div>
+                  <div><Icon name="icon-clipboard" className="button-icon" /><strong>Order fulfillment</strong><span>Receive confirmed clinic orders after buyer approval.</span></div>
+                </div>
               </div>
             </section>
           )}
