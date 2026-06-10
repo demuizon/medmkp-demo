@@ -1,6 +1,7 @@
 import { resolve } from "path"
 import { discoverSupplierSitemaps } from "./sitemap-discovery"
 import { discoverSupplierSourceUrls } from "./source-url-discovery"
+import { discoverDcDentalCatalogUrls } from "./dcdental-catalog-discovery"
 import { discoverPearsonCatalogUrls } from "./pearson-catalog-discovery"
 import { extractProductPages } from "./product-extraction"
 import { filterSuppliers, supplierRowsFromCsv } from "./suppliers"
@@ -30,6 +31,7 @@ export type SupplierIngestionPipelineOptions = {
   sourceConcurrency?: number
   maxLinksPerSource?: number
   maxSitemapsPerSupplier?: number
+  maxDcDentalCatalogPages?: number
   maxPearsonCatalogPages?: number
   debug?: boolean
   debugOutputDir?: string
@@ -163,6 +165,19 @@ export async function runSupplierIngestionPipeline(
         `Index stage Pearson full-catalog discovery: ${pearsonCatalogUrls.length} product URL(s)`
       )
       indexedUrls.push(...pearsonCatalogUrls)
+    }
+    const dcDentalCatalogUrls = await discoverDcDentalCatalogUrls(suppliers, indexedUrls, {
+      timeoutMs: options.timeoutMs,
+      debug: options.debug,
+      concurrency: options.sourceConcurrency,
+      maxPages: options.maxDcDentalCatalogPages,
+    })
+    if (dcDentalCatalogUrls.length) {
+      log(
+        options.debug,
+        `Index stage DC Dental catalog discovery: ${dcDentalCatalogUrls.length} product URL(s)`
+      )
+      indexedUrls.push(...dcDentalCatalogUrls)
     }
     const indexedSummary = summarizeIndexedUrls(indexedUrls)
     log(

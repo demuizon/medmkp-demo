@@ -15,6 +15,7 @@ type CliOptions = {
   sourceConcurrency?: number
   maxLinksPerSource?: number
   maxSitemapsPerSupplier?: number
+  maxDcDentalCatalogPages?: number
   maxPearsonCatalogPages?: number
   debug: boolean
   debugOutputDir?: string
@@ -77,6 +78,9 @@ function parseOptions(): CliOptions {
     maxSitemapsPerSupplier: process.env.SUPPLIER_INGESTION_MAX_SITEMAPS_PER_SUPPLIER
       ? Number(process.env.SUPPLIER_INGESTION_MAX_SITEMAPS_PER_SUPPLIER)
       : undefined,
+    maxDcDentalCatalogPages: process.env.SUPPLIER_INGESTION_MAX_DCDENTAL_CATALOG_PAGES
+      ? Number(process.env.SUPPLIER_INGESTION_MAX_DCDENTAL_CATALOG_PAGES)
+      : undefined,
     maxPearsonCatalogPages: process.env.SUPPLIER_INGESTION_MAX_PEARSON_CATALOG_PAGES
       ? Number(process.env.SUPPLIER_INGESTION_MAX_PEARSON_CATALOG_PAGES)
       : undefined,
@@ -132,6 +136,9 @@ function parseOptions(): CliOptions {
     if (arg.startsWith("--max-sitemaps-per-supplier=")) {
       options.maxSitemapsPerSupplier = Number(optionValue(arg))
     }
+    if (arg.startsWith("--max-dcdental-catalog-pages=")) {
+      options.maxDcDentalCatalogPages = Number(optionValue(arg))
+    }
     if (arg.startsWith("--max-pearson-catalog-pages=")) {
       options.maxPearsonCatalogPages = Number(optionValue(arg))
     }
@@ -164,6 +171,7 @@ async function run() {
     sourceConcurrency: options.sourceConcurrency,
     maxLinksPerSource: options.maxLinksPerSource,
     maxSitemapsPerSupplier: options.maxSitemapsPerSupplier,
+    maxDcDentalCatalogPages: options.maxDcDentalCatalogPages,
     maxPearsonCatalogPages: options.maxPearsonCatalogPages,
   })
 

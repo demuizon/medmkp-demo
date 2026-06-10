@@ -25,6 +25,58 @@ const categoryPatterns = [
   /\/catalog/i,
 ]
 
+function classifyDcDentalUrl(url: string) {
+  let parsed: URL
+
+  try {
+    parsed = new URL(url)
+  } catch {
+    return undefined
+  }
+
+  if (!/dcdental\.com$/i.test(parsed.hostname)) {
+    return undefined
+  }
+
+  const pathname = parsed.pathname.replace(/\/+$/, "")
+  const segments = pathname.split("/").filter(Boolean)
+  const firstSegment = segments[0]?.toLowerCase() ?? ""
+
+  if (!segments.length) {
+    return undefined
+  }
+
+  if (/^(?:search|cart|checkout|about-us|contact-us|privacy-policy|terms-conditions|careers|equipment-service)$/i.test(firstSegment)) {
+    return {
+      url_type: "other" as const,
+      confidence_score: 15,
+      reasons: ["DC Dental non-catalog URL"],
+    }
+  }
+
+  if (/^(?:supplies|small-equipment|3m-merchandise)$/i.test(firstSegment)) {
+    return {
+      url_type: "category" as const,
+      confidence_score: 80,
+      reasons: ["DC Dental catalog category URL"],
+    }
+  }
+
+  if (
+    segments.length === 1 &&
+    /-[A-Za-z0-9]{4,}$/.test(segments[0]) &&
+    !/\.(?:css|js|png|jpe?g|gif|svg|webp|ico)$/i.test(segments[0])
+  ) {
+    return {
+      url_type: "product" as const,
+      confidence_score: 85,
+      reasons: ["DC Dental SuiteCommerce product URL"],
+    }
+  }
+
+  return undefined
+}
+
 export function classifySupplierUrl(
   url: string
 ): Pick<IndexedSupplierUrl, "url_type" | "confidence_score" | "reasons"> {
@@ -44,6 +96,12 @@ export function classifySupplierUrl(
       confidence_score: 70,
       reasons: ["Pearson product-family page, not SKU-level product URL"],
     }
+  }
+
+  const dcDentalClassification = classifyDcDentalUrl(url)
+
+  if (dcDentalClassification) {
+    return dcDentalClassification
   }
 
   const productHits = productPatterns.filter((pattern) => pattern.test(url))

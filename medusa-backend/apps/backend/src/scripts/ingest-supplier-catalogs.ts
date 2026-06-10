@@ -21,6 +21,7 @@ type CliOptions = {
   sourceConcurrency?: number
   maxLinksPerSource?: number
   maxSitemapsPerSupplier?: number
+  maxDcDentalCatalogPages?: number
   maxPearsonCatalogPages?: number
   debug: boolean
   commit: boolean
@@ -59,6 +60,9 @@ function parseOptions(): CliOptions {
       : undefined,
     maxSitemapsPerSupplier: process.env.SUPPLIER_INGESTION_MAX_SITEMAPS_PER_SUPPLIER
       ? Number(process.env.SUPPLIER_INGESTION_MAX_SITEMAPS_PER_SUPPLIER)
+      : undefined,
+    maxDcDentalCatalogPages: process.env.SUPPLIER_INGESTION_MAX_DCDENTAL_CATALOG_PAGES
+      ? Number(process.env.SUPPLIER_INGESTION_MAX_DCDENTAL_CATALOG_PAGES)
       : undefined,
     maxPearsonCatalogPages: process.env.SUPPLIER_INGESTION_MAX_PEARSON_CATALOG_PAGES
       ? Number(process.env.SUPPLIER_INGESTION_MAX_PEARSON_CATALOG_PAGES)
@@ -107,6 +111,9 @@ function parseOptions(): CliOptions {
     }
     if (arg.startsWith("--max-sitemaps-per-supplier=")) {
       options.maxSitemapsPerSupplier = Number(optionValue(arg))
+    }
+    if (arg.startsWith("--max-dcdental-catalog-pages=")) {
+      options.maxDcDentalCatalogPages = Number(optionValue(arg))
     }
     if (arg.startsWith("--max-pearson-catalog-pages=")) {
       options.maxPearsonCatalogPages = Number(optionValue(arg))
@@ -202,6 +209,52 @@ function sourceUrlRecord(input: {
   }
 }
 
+const dcDentalDefaultSourcePaths = [
+  "/Supplies",
+  "/Small-Equipment",
+  "/3M-Merchandise",
+]
+
+function defaultSourceUrlsForSupplier(supplier: {
+  name: string
+  website_url: string
+  slug?: string
+}) {
+  const site = normalizeSiteUrl(supplier.website_url)
+
+  if (!/dcdental.com$/i.test(new URL(site.origin).hostname) &&
+    !/dc dental/i.test(supplier.name)) {
+    return [] as SupplierSourceUrl[]
+  }
+
+  return dcDentalDefaultSourcePaths.map((path) => sourceUrlRecord({
+    supplierName: supplier.name,
+    supplierWebsiteUrl: supplier.website_url,
+    sourceCatalog: sourceCatalogForSupplier(supplier),
+    sourceUrl: new URL(path, site.origin).href,
+  }))
+}
+
+function chunks<T>(items: T[], size: number) {
+  const result: T[][] = []
+
+  for (let index = 0; index < items.length; index += size) {
+    result.push(items.slice(index, index + size))
+  }
+
+  return result
+}
+
+async function promiseChunks<T>(
+  items: T[],
+  size: number,
+  iterator: (chunk: T[]) => Promise<unknown>
+) {
+  for (const chunk of chunks(items, size)) {
+    await iterator(chunk)
+  }
+}
+
 async function replaceSupplierCatalog(
   medmkp: MedMKPModuleService,
   input: SupplierCatalogIngestionInput
@@ -242,32 +295,38 @@ async function replaceSupplierCatalog(
     .map((source) => source.id)
 
   if (matchIdsToDelete.length) {
-    await medmkp.deleteCanonicalProductMatches(matchIdsToDelete)
+    await promiseChunks(matchIdsToDelete, 500, (chunk) =>
+      medmkp.deleteCanonicalProductMatches(chunk)
+    )
   }
   if (productIdsToDelete.length) {
-    await medmkp.deleteSupplierProducts(productIdsToDelete)
+    await promiseChunks(productIdsToDelete, 500, (chunk) =>
+      medmkp.deleteSupplierProducts(chunk)
+    )
   }
   if (sourceIdsToDelete.length) {
-    await medmkp.deleteSupplierCatalogSources(sourceIdsToDelete)
+    await promiseChunks(sourceIdsToDelete, 500, (chunk) =>
+      medmkp.deleteSupplierCatalogSources(chunk)
+    )
   }
 
   await medmkp.createSupplierCatalogSources(ingestion.source)
-  await medmkp.createSupplierProducts(
-    ingestion.supplierProducts as Parameters<
-      typeof medmkp.createSupplierProducts
-    >[0]
+  await promiseChunks(ingestion.supplierProducts, 500, (chunk) =>
+    medmkp.createSupplierProducts(
+      chunk as Parameters<typeof medmkp.createSupplierProducts>[0]
+    )
   )
-  await medmkp.createCanonicalProductMatches(
-    ingestion.canonicalProductMatches as Parameters<
-      typeof medmkp.createCanonicalProductMatches
-    >[0]
+  await promiseChunks(ingestion.canonicalProductMatches, 500, (chunk) =>
+    medmkp.createCanonicalProductMatches(
+      chunk as Parameters<typeof medmkp.createCanonicalProductMatches>[0]
+    )
   )
 
   if (ingestion.priceSnapshots.length) {
-    await medmkp.createSupplierPriceSnapshots(
-      ingestion.priceSnapshots as Parameters<
-        typeof medmkp.createSupplierPriceSnapshots
-      >[0]
+    await promiseChunks(ingestion.priceSnapshots, 500, (chunk) =>
+      medmkp.createSupplierPriceSnapshots(
+        chunk as Parameters<typeof medmkp.createSupplierPriceSnapshots>[0]
+      )
     )
   }
 
@@ -316,6 +375,9 @@ export default async function ingestSupplierCatalogs({
       sourceUrl,
     }))
     : []
+  const fallbackSourceUrls = matchedSupplier && !dbSourceUrls.length && !cliSourceUrls.length
+    ? defaultSourceUrlsForSupplier(matchedSupplier)
+    : []
 
   const result = await runSupplierIngestionPipeline({
     suppliers,
@@ -324,10 +386,11 @@ export default async function ingestSupplierCatalogs({
     timeoutMs: options.timeoutMs,
     sitemapConcurrency: options.sitemapConcurrency,
     productConcurrency: options.productConcurrency,
-    sourceUrls: [...dbSourceUrls, ...cliSourceUrls],
+    sourceUrls: [...dbSourceUrls, ...cliSourceUrls, ...fallbackSourceUrls],
     sourceConcurrency: options.sourceConcurrency,
     maxLinksPerSource: options.maxLinksPerSource,
     maxSitemapsPerSupplier: options.maxSitemapsPerSupplier,
+    maxDcDentalCatalogPages: options.maxDcDentalCatalogPages,
     maxPearsonCatalogPages: options.maxPearsonCatalogPages,
     debug: options.debug,
   })
@@ -361,7 +424,7 @@ export default async function ingestSupplierCatalogs({
         commit: options.commit,
         allow_empty_commit: options.allowEmptyCommit,
         supplier_id: matchedSupplier?.id,
-        source_urls: dbSourceUrls.length + cliSourceUrls.length,
+        source_urls: dbSourceUrls.length + cliSourceUrls.length + fallbackSourceUrls.length,
         ...result.summary,
         import: importResult,
       },
