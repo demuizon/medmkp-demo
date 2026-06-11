@@ -32,6 +32,21 @@ function productIdFromUrl(url: string) {
   return firstMatch(url, [/\/product\/([0-9]+)\//i])
 }
 
+/**
+ * Dental City's itemOffered meta markup emits broken URLs (the path is a
+ * sitemap shard, e.g. "https://www.dentalcity.com//754/..." which 404s).
+ * Keep the crawled product page URL and append only the SKU variant query.
+ */
+function skuVariantUrl(metaUrl: string, pageUrl: string) {
+  const queryIndex = metaUrl.indexOf("?")
+
+  if (queryIndex < 0 || pageUrl.includes("?")) {
+    return pageUrl
+  }
+
+  return `${pageUrl}${metaUrl.slice(queryIndex)}`
+}
+
 function categoryParts(category: string) {
   const [categoryName = "Dental supplies", subcategory = ""] = category
     .split("/")
@@ -117,7 +132,7 @@ function dentalCityRows(
       category: categoryName,
       subcategory,
       product_line: line,
-      product_url: url || candidate.url,
+      product_url: skuVariantUrl(url, candidate.url),
       pack_size: packSize(`${name} ${description}`),
       unit_of_measure: "",
       price,

@@ -18,6 +18,9 @@ Catalog data lands in:
 - `medmkp_supplier_price_snapshot`
 - `medmkp_canonical_product_match`
 
+After ingestion commits, regenerate cross-supplier product matches — see
+`PRODUCT_MATCHING.md`.
+
 ## Pipeline Shape
 
 The supplier pipeline has three stages:
