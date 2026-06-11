@@ -5,10 +5,12 @@
 #   docker compose up -d --build
 #   docker compose exec airflow cat standalone_admin_password.txt   # UI login (admin)
 #
-# One-time setup inside the container (backend deps for the DAG's npm commands):
+# Backend npm deps are installed automatically by the backend-deps init service
+# on every `up`. One-time, deliberate setup (writes to the production DB, and
+# re-running it replaces the listed supplier rows):
 #
-#   docker compose exec airflow bash -c \
-#     "cd /opt/medmkp/medusa-backend/apps/backend && npm install"
+#   docker compose exec airflow bash -c "cd /opt/medmkp/medusa-backend/apps/backend \
+#     && npm run supplier:seed-usable -- ./data/supplier-vetting/sky-shasta-catalog-sources.json"
 #
 # The repo is bind-mounted at /opt/medmkp; the backend .env (DATABASE_URL,
 # DB_SSL=true for Render Postgres) lives in the mounted checkout. Flip
@@ -31,6 +33,15 @@ services:
       timeout: 5s
       retries: 10
 
+  backend-deps:
+    build: .
+    container_name: medmkp-airflow-backend-deps
+    restart: "no"
+    working_dir: /opt/medmkp/medusa-backend/apps/backend
+    entrypoint: ["bash", "-c", "npm install"]
+    volumes:
+      - ..:/opt/medmkp
+
   airflow:
     build: .
     container_name: medmkp-airflow
@@ -38,6 +49,8 @@ services:
     depends_on:
       airflow-db:
         condition: service_healthy
+      backend-deps:
+        condition: service_completed_successfully
     ports:
       - "8080:8080"
     environment:
