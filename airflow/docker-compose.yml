@@ -15,6 +15,10 @@
 # The repo is bind-mounted at /opt/medmkp; the backend .env (DATABASE_URL,
 # DB_SSL=true for Render Postgres) lives in the mounted checkout. Flip
 # AIRFLOW_VAR_MEDMKP_SUPPLIER_INGEST_COMMIT to "true" once dry runs look good.
+#
+# Containers run as AIRFLOW_UID (default 1000, the checkout owner) with GID 0
+# so they can write to the bind mount. If the checkout is owned by another
+# user, run: echo "AIRFLOW_UID=$(id -u)" > .env
 
 services:
   airflow-db:
@@ -37,8 +41,14 @@ services:
     build: .
     container_name: medmkp-airflow-backend-deps
     restart: "no"
+    # Run as the host user so npm can write node_modules into the bind mount.
+    user: "${AIRFLOW_UID:-1000}:0"
     working_dir: /opt/medmkp/medusa-backend/apps/backend
     entrypoint: ["bash", "-c", "npm install"]
+    environment:
+      # The bind-mount UID has no passwd entry in the image; give npm a
+      # writable cache/home instead of the default "/".
+      HOME: /tmp
     volumes:
       - ..:/opt/medmkp
 
@@ -46,6 +56,9 @@ services:
     build: .
     container_name: medmkp-airflow
     restart: unless-stopped
+    # Same UID as the host checkout owner; GID 0 keeps the Airflow image's
+    # group-writable dirs (AIRFLOW_HOME, logs) usable for a non-50000 user.
+    user: "${AIRFLOW_UID:-1000}:0"
     depends_on:
       airflow-db:
         condition: service_healthy
