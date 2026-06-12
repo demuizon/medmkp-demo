@@ -44,7 +44,7 @@ services:
     # Run as the host user so npm can write node_modules into the bind mount.
     user: "${AIRFLOW_UID:-1000}:0"
     working_dir: /opt/medmkp/medusa-backend/apps/backend
-    entrypoint: ["bash", "-c", "npm install"]
+    entrypoint: ["bash", "-c", "npm install --include=dev --no-audit --no-fund --loglevel=info --foreground-scripts"]
     environment:
       # The bind-mount UID has no passwd entry in the image; give npm a
       # writable cache/home instead of the default "/".

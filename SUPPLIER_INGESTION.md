@@ -248,6 +248,12 @@ the DAG's Airflow Variables via `AIRFLOW_VAR_*` environment entries — commits
 are disabled by default until `AIRFLOW_VAR_MEDMKP_SUPPLIER_INGEST_COMMIT` is
 flipped to `true`. Setup commands are documented at the top of the compose file.
 
+After committing and pushing changes, deploy the NUC instance from your
+development machine with `npm run deploy:airflow` at the repo root. The deploy
+helper SSHes to `nuc`, fast-forwards `/opt/medmkp` from the current branch,
+and runs `docker compose up -d --build` in `airflow/`. Override defaults with
+`NUC_HOST`, `NUC_REPO_DIR`, or `BRANCH` when needed.
+
 Before a supplier can be scheduled it must exist in `medmkp_supplier`. Sky
 Dental and Shasta Dental seed rows are tracked in
 `medusa-backend/apps/backend/data/supplier-vetting/sky-shasta-catalog-sources.json`:
