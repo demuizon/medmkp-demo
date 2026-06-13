@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Generate dental test invoice PDFs from real supplier catalog data.
 
-Reads priced supplier products from the local MedMKP Postgres, marks prices
-up 5-30% (so the savings pipeline has something to find), and renders
+Reads priced supplier products from the local MedMKP Postgres, prefers
+products that show up across multiple suppliers, marks invoice prices up
+5-30% (so the savings pipeline has something to find), and renders
 realistic vendor invoices into demo-assets/test-invoices/.
 
 Usage:
@@ -14,6 +15,7 @@ medusa-backend/apps/backend/.env.
 
 import argparse
 import datetime
+import json
 import os
 import random
 import re
@@ -45,6 +47,15 @@ BILL_TO = [
 
 UNITS = ["each", "box", "pack", "case", "bag"]
 
+MIN_SUPPLIERS_PER_ITEM = 3
+DEMO_SUPPLIERS = {
+    "amerdental-prod-full": "American Dental Accessories",
+    "carolina-prod-full": "Carolina Dental Supply",
+    "smoke-dental_city": "Dental City",
+    "smoke-pearson_dental": "Pearson Dental",
+}
+DEMO_SIZES = ["small", "medium", "large", "extra large"]
+
 
 def database_url() -> str:
     if os.environ.get("DATABASE_URL"):
@@ -57,10 +68,51 @@ def database_url() -> str:
     raise SystemExit("DATABASE_URL not found")
 
 
+def normalize_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
+
+
 def load_products():
-    """supplier name -> [(sku, product name, price_cents)] via psql (no driver dep)."""
+    """Return demo supplier products from cached ingestion files when available."""
+    cache_root = ROOT / "medusa-backend" / "apps" / "backend" / ".medmkp" / "ingestion"
+    cached_products = []
+    if cache_root.exists():
+        for products_path in cache_root.rglob("products.json"):
+            supplier_key = products_path.parent.name
+            display_name = DEMO_SUPPLIERS.get(supplier_key, supplier_key)
+            try:
+                entries = json.loads(products_path.read_text())
+            except Exception:
+                continue
+            for entry in entries:
+                cached_products.append(
+                    {
+                        "supplier_key": supplier_key,
+                        "supplier": display_name,
+                        "sku": entry.get("sku", ""),
+                        "name": entry.get("name", ""),
+                        "description": entry.get("description", ""),
+                        "manufacturer_sku": entry.get("manufacturer_sku", ""),
+                        "brand": entry.get("brand", ""),
+                        "pack_size": entry.get("pack_size", ""),
+                        "unit_of_measure": entry.get("unit_of_measure", ""),
+                        "product_url": entry.get("product_url", ""),
+                        "category": entry.get("category", ""),
+                        "price_cents": round(float(entry.get("price", 0)) * 100),
+                    }
+                )
+        if cached_products:
+            return cached_products
+
+    """Fallback: query priced supplier products via psql (no driver dep)."""
     sql = (
-        "SELECT s.name, p.sku, p.name, snap.price_cents "
+        "SELECT s.name AS supplier, p.sku, p.name, "
+        "COALESCE(p.manufacturer_sku, '') AS manufacturer_sku, "
+        "COALESCE(p.brand, '') AS brand, "
+        "COALESCE(p.pack_size, '') AS pack_size, "
+        "COALESCE(p.unit_of_measure, '') AS unit_of_measure, "
+        "COALESCE(p.product_url, '') AS product_url, "
+        "snap.price_cents "
         "FROM medmkp_supplier_product p "
         "JOIN medmkp_supplier s ON s.id = p.supplier_id AND s.deleted_at IS NULL "
         "JOIN LATERAL (SELECT price_cents FROM medmkp_supplier_price_snapshot ps "
@@ -74,14 +126,150 @@ def load_products():
         text=True,
         check=True,
     ).stdout
-    products = {}
+    products = []
     for line in out.splitlines():
         parts = line.split("\t")
-        if len(parts) != 4:
+        if len(parts) != 9:
             continue
-        supplier, sku, name, price = parts
-        products.setdefault(supplier, []).append((sku, name, int(price)))
+        supplier, sku, name, manufacturer_sku, brand, pack_size, unit_of_measure, product_url, price = parts
+        products.append(
+            {
+                "supplier": supplier,
+                "sku": sku,
+                "name": name,
+                "manufacturer_sku": manufacturer_sku,
+                "brand": brand,
+                "pack_size": pack_size,
+                "unit_of_measure": unit_of_measure,
+                "product_url": product_url,
+                "price_cents": int(price),
+            }
+        )
     return products
+
+
+def extract_size(product_name: str) -> str:
+    text = normalize_key(product_name)
+    if "extra large" in text or re.search(r"\bxl\b", text):
+        return "extra large"
+    if "extra small" in text or re.search(r"\bxs\b", text) or "x small" in text:
+        return "extra small"
+    if "medium" in text:
+        return "medium"
+    if "large" in text:
+        return "large"
+    if "small" in text:
+        return "small"
+    return ""
+
+
+def build_glove_demo_batches(products, rng):
+    batches = []
+    for supplier_key, vendor in DEMO_SUPPLIERS.items():
+        supplier_products = [
+            product
+            for product in products
+            if product.get("supplier_key") == supplier_key
+            and "nitrile" in normalize_key(f"{product['name']} {product['description']} {product['category']}")
+            and "glove" in normalize_key(f"{product['name']} {product['description']} {product['category']}")
+        ]
+        if not supplier_products:
+            continue
+
+        by_size = {}
+        for product in supplier_products:
+            size = extract_size(product["name"] + " " + product["description"])
+            if size and size not in by_size:
+                by_size[size] = product
+
+        items = []
+        for size in DEMO_SIZES:
+            product = by_size.get(size)
+            if not product:
+                continue
+            qty = 1 if size in {"small", "extra small"} else 2 if size == "medium" else 3 if size == "large" else 4
+            items.append(
+                (
+                    product["sku"],
+                    product_description(product),
+                    qty,
+                    "box",
+                    round(product["price_cents"] * rng.uniform(1.05, 1.18)),
+                )
+            )
+
+        if len(items) >= 2:
+            batches.append((vendor, items))
+
+    return batches
+
+
+def overlap_key(product):
+    if product["manufacturer_sku"].strip():
+        return f"msku:{normalize_key(product['manufacturer_sku'])}"
+    return "name:" + "|".join(
+        [
+            normalize_key(product["brand"]),
+            normalize_key(product["pack_size"]),
+            normalize_key(product["name"]),
+        ]
+    )
+
+
+def build_overlap_groups(products):
+    groups = {}
+    for product in products:
+        key = overlap_key(product)
+        if key in {"msku:", "name:||"}:
+            continue
+        groups.setdefault(key, []).append(product)
+
+    scored = []
+    for key, rows in groups.items():
+        best_by_supplier = {}
+        for row in rows:
+            current = best_by_supplier.get(row["supplier"])
+            if current is None or row["price_cents"] < current["price_cents"]:
+                best_by_supplier[row["supplier"]] = row
+
+        items = sorted(best_by_supplier.values(), key=lambda row: (row["price_cents"], row["supplier"]))
+        if len(items) < MIN_SUPPLIERS_PER_ITEM:
+            continue
+
+        prices = [row["price_cents"] for row in items]
+        scored.append(
+            {
+                "key": key,
+                "items": items,
+                "suppliers": sorted(best_by_supplier.keys()),
+                "supplier_count": len(best_by_supplier),
+                "price_min": min(prices),
+                "price_max": max(prices),
+                "spread": max(prices) - min(prices),
+            }
+        )
+
+    scored.sort(key=lambda group: (group["supplier_count"], group["spread"], len(group["items"])), reverse=True)
+    return scored
+
+
+def build_supplier_pools(groups):
+    pools = {}
+    for group in groups:
+        for item in group["items"]:
+            pools.setdefault(item["supplier"], []).append(group)
+
+    for supplier_groups in pools.values():
+        supplier_groups.sort(
+            key=lambda group: (
+                group["supplier_count"],
+                group["spread"],
+                group["price_max"],
+                group["price_min"],
+            ),
+            reverse=True,
+        )
+    return pools
 
 
 def money(cents: int) -> str:
@@ -175,6 +363,15 @@ def build_invoice(path: Path, vendor: str, items, invoice_no: str, layout: str, 
     return grand
 
 
+def product_description(product):
+    pieces = [product["name"]]
+    if product["brand"].strip() and product["brand"].strip().lower() not in normalize_key(product["name"]):
+        pieces.append(product["brand"].strip())
+    if product["pack_size"].strip():
+        pieces.append(product["pack_size"].strip())
+    return " - ".join(pieces)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--count", type=int, default=6, help="invoices per run")
@@ -182,36 +379,38 @@ def main():
     args = parser.parse_args()
     rng = random.Random(args.seed)
 
-    catalog = load_products()
-    suppliers = [name for name, rows in sorted(catalog.items()) if len(rows) >= 12]
-    if not suppliers:
-        raise SystemExit("No suppliers with priced products found in the database.")
+    products = load_products()
+    demo_batches = build_glove_demo_batches(products, rng)
+    if demo_batches:
+        print(f"Found {len(demo_batches)} demo comparison supplier groups from cached ingestion data.")
+    else:
+        groups = build_overlap_groups(products)
+        supplier_pools = build_supplier_pools(groups)
+        demo_batches = []
+        suppliers = [
+            name
+            for name, groups_for_supplier in sorted(
+                supplier_pools.items(), key=lambda item: len(item[1]), reverse=True
+            )
+            if len(groups_for_supplier) >= 4
+        ]
+        if not groups:
+            raise SystemExit(
+                "No multi-supplier overlap groups found. The demo invoice generator needs at least one product shared by 3 suppliers."
+            )
+        if not suppliers:
+            raise SystemExit("No suppliers with enough multi-supplier overlap products found.")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    for existing in OUT_DIR.glob("invoice-*.pdf"):
+        existing.unlink()
 
     made = []
-    for index in range(args.count):
-        known_vendor = index < args.count - 1  # last one is an unknown vendor
-        supplier = suppliers[index % len(suppliers)]
-        pool = catalog[supplier]
-        picks = rng.sample(pool, k=min(rng.randint(6, 12), len(pool)))
-
-        items = []
-        for sku, name, price in picks:
-            qty = rng.choice([1, 2, 2, 3, 4, 5, 6, 8, 10, 12])
-            markup = rng.uniform(1.05, 1.30)
-            desc = re.sub(r"\s+", " ", name).strip()
-            items.append((sku if known_vendor else "", desc, qty, rng.choice(UNITS), round(price * markup)))
-
-        if known_vendor:
-            vendor = supplier
-        else:
-            vendor = "Smile Source Distribution"
-
+    for index, (vendor, items) in enumerate(demo_batches[: args.count]):
         slug = re.sub(r"[^a-z0-9]+", "-", vendor.lower()).strip("-")
-        invoice_no = f"{slug[:3].upper()}-{rng.randint(10000, 99999)}"
-        path = OUT_DIR / f"invoice-{slug}-{invoice_no.lower()}.pdf"
-        total = build_invoice(path, vendor, items, invoice_no, rng.choice(["sku-first", "desc-first"]), rng)
+        invoice_no = f"{slug[:3].upper()}-{20260000 + index + 1}"
+        path = OUT_DIR / f"invoice-{slug}-glove-demo.pdf"
+        total = build_invoice(path, vendor, items, invoice_no, "sku-first", rng)
         made.append((path.name, vendor, len(items), total))
 
     for name, vendor, count, total in made:

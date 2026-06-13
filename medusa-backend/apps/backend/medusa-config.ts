@@ -2,16 +2,35 @@ import { loadEnv, defineConfig } from '@medusajs/framework/utils'
 
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
 
+function intEnv(name: string, fallback: number) {
+  const value = process.env[name]
+  if (!value) {
+    return fallback
+  }
+
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
 const databaseDriverOptions =
-  process.env.DB_SSL === "true"
-    ? {
-        connection: {
-          ssl: {
-            rejectUnauthorized: false,
+  {
+    pool: {
+      min: intEnv("DB_POOL_MIN", 1),
+      max: intEnv("DB_POOL_MAX", 20),
+      acquireTimeoutMillis: intEnv("DB_POOL_ACQUIRE_TIMEOUT_MS", 60000),
+      idleTimeoutMillis: intEnv("DB_POOL_IDLE_TIMEOUT_MS", 30000),
+      createRetryIntervalMillis: intEnv("DB_POOL_CREATE_RETRY_INTERVAL_MS", 200),
+    },
+    ...(process.env.DB_SSL === "true"
+      ? {
+          connection: {
+            ssl: {
+              rejectUnauthorized: false,
+            },
           },
-        },
-      }
-    : undefined
+        }
+      : {}),
+  }
 
 module.exports = defineConfig({
   projectConfig: {
