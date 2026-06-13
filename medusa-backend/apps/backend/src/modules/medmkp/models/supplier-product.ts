@@ -9,6 +9,7 @@ const SupplierProduct = model.define("medmkp_supplier_product", {
   source_group_name: model.text().searchable(),
   source_variant: model.text().searchable(),
   product_url: model.text(),
+  image_url: model.text(),
   sku: model.text().searchable(),
   manufacturer_sku: model.text().searchable(),
   brand: model.text().searchable(),

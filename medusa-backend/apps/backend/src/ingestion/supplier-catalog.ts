@@ -21,6 +21,7 @@ export type SupplierCatalogRow = {
   subcategory?: string
   product_line?: string
   product_url?: string
+  image_url?: string
   pack_size?: string
   unit_of_measure?: string
   price_cents?: number
@@ -67,6 +68,24 @@ function normalizePriceBasis(value?: PriceBasis): PriceBasis {
 
 function normalizeAvailability(value?: Availability): Availability {
   return value ?? "unknown"
+}
+
+function stringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+    : []
+}
+
+function firstImageUrl(row: SupplierCatalogRow) {
+  if (row.image_url?.trim()) {
+    return row.image_url.trim()
+  }
+
+  const raw = row.raw && typeof row.raw === "object"
+    ? row.raw as Record<string, unknown>
+    : undefined
+
+  return stringArray(raw?.image_urls)[0] ?? ""
 }
 
 function scoreCanonicalMatch(
@@ -170,6 +189,7 @@ export function buildSupplierCatalogIngestion(
       source_group_name: row.product_line ?? "",
       source_variant: row.pack_size ?? "",
       product_url: row.product_url ?? "",
+      image_url: firstImageUrl(row),
       sku,
       manufacturer_sku: row.manufacturer_sku ?? "",
       brand: row.brand ?? "",

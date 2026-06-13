@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -515,6 +516,9 @@ export default function Home() {
         category: product.category,
         supplier_name: product.best_offer?.supplier_name,
         unit_price_cents: product.best_offer?.price_cents,
+        handle: product.handle,
+        price_range_cents: product.price_range_cents,
+        offer_count: product.offer_count,
       }));
     }
 
@@ -526,6 +530,7 @@ export default function Home() {
         category: category.name,
         supplier_name: item.supplier_name,
         unit_price_cents: item.unit_price_cents,
+        handle: "",
       };
     });
   }, [canonicalResults, canonicalSource, catalogMatches]);
@@ -815,7 +820,7 @@ export default function Home() {
             {normalizedSearch && (
               <SearchResults
                 results={searchResults}
-                onViewCatalog={() => setView("quote")}
+                searchHref={`/catalog/search?q=${encodeURIComponent(searchTerm.trim())}`}
               />
             )}
             <button className="icon-button account-bell" type="button" aria-label="Notifications">
@@ -1292,6 +1297,9 @@ function CatalogExplorer({ catalog, source, hasSearch, titleId = "catalogHeading
                 <strong>{price}</strong>
               </div>
               <p>{item.supplier_name || "Supplier pending"}</p>
+              <Link className="category-link" href={`/catalog/search?category=${encodeURIComponent(category.name)}`}>
+                Open category
+              </Link>
             </article>
           );
         })}
@@ -1307,26 +1315,27 @@ function CatalogExplorer({ catalog, source, hasSearch, titleId = "catalogHeading
   );
 }
 
-function SearchResults({ results, onViewCatalog }) {
+function SearchResults({ results, searchHref }) {
   return (
     <div className="search-results" role="region" aria-label="Catalog search results">
       <div className="search-results-header">
         <strong>{results.length ? "Matching canonical products" : "No catalog matches"}</strong>
-        <button type="button" onClick={onViewCatalog}>View catalog</button>
+        <Link className="search-results-link" href={searchHref}>View catalog</Link>
       </div>
       {results.slice(0, 5).map((result) => {
         const price = typeof result.unit_price_cents === "number"
           ? money.format(result.unit_price_cents / 100)
           : "Price pending";
+        const href = result.handle ? `/catalog/${result.handle}` : searchHref;
 
         return (
-          <button className="search-result" type="button" key={result.id} onClick={onViewCatalog}>
+          <Link className="search-result" key={result.id} href={href}>
             <span>
               <strong>{result.name}</strong>
               <small>{result.category || "Uncategorized"} · {result.supplier_name || "Supplier pending"}</small>
             </span>
             <em>{price}</em>
-          </button>
+          </Link>
         );
       })}
       {!results.length && (

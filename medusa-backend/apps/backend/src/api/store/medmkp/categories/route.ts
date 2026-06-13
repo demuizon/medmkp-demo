@@ -25,7 +25,12 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     const categories = await client.query(
       `SELECT category, count(*) AS product_count, count(DISTINCT supplier_id) AS supplier_count
        FROM medmkp_supplier_product
-       WHERE deleted_at IS NULL AND category <> ''
+       WHERE deleted_at IS NULL
+         AND category <> ''
+         AND lower(category) <> 'dental supplies'
+         AND lower(category) NOT IN (
+           SELECT lower(name) FROM medmkp_supplier WHERE deleted_at IS NULL
+         )
        GROUP BY category
        ORDER BY product_count DESC
        LIMIT $1`,
@@ -43,7 +48,12 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
          ORDER BY s.captured_at DESC LIMIT 1
        ) price ON price.price_cents > 0
        LEFT JOIN medmkp_supplier sup ON sup.id = p.supplier_id AND sup.deleted_at IS NULL
-       WHERE p.deleted_at IS NULL AND p.category = ANY($1)
+       WHERE p.deleted_at IS NULL
+         AND p.category = ANY($1)
+         AND lower(p.category) <> 'dental supplies'
+         AND lower(p.category) NOT IN (
+           SELECT lower(name) FROM medmkp_supplier WHERE deleted_at IS NULL
+         )
        ORDER BY p.category, price.price_cents ASC`,
       [categories.rows.map((row) => row.category)]
     )

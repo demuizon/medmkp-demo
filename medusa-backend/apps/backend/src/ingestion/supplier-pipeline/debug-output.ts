@@ -33,6 +33,7 @@ const productHeaders = [
   "subcategory",
   "product_line",
   "product_url",
+  "image_url",
   "pack_size",
   "unit_of_measure",
   "price",

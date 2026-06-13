@@ -87,6 +87,7 @@ function csvRowsToCatalogRows(csvPath: string): SupplierCatalogRow[] {
       subcategory: record.subcategory,
       product_line: record.product_line,
       product_url: record.product_url,
+      image_url: record.image_url,
       pack_size: record.pack_size,
       unit_of_measure: record.unit_of_measure,
       price_cents: cents(record.price),

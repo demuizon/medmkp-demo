@@ -50,6 +50,32 @@ function skuProductUrl(candidate: ProductPageCandidate, binSku: string) {
   return url.href
 }
 
+function resolvePearsonImageUrl(candidate: ProductPageCandidate, src: string) {
+  try {
+    const url = new URL(src, candidate.url)
+
+    if (!/pearsondental\.com$/i.test(url.hostname)) {
+      return ""
+    }
+
+    return url.href
+  } catch {
+    return ""
+  }
+}
+
+function pearsonImageUrls(candidate: ProductPageCandidate, html: string) {
+  const urls = [
+    ...html.matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi),
+  ]
+    .map((match) => resolvePearsonImageUrl(candidate, match[1]))
+    .filter((url) =>
+      /\/catalog\/img(?:_ext)?\/[^?#]+\.(?:jpe?g|png|gif)(?:[?#].*)?$/i.test(url)
+    )
+
+  return [...new Set(urls)]
+}
+
 function candidateCategory(candidate: ProductPageCandidate) {
   return {
     category: candidate.category?.trim() || "Dental supplies",
@@ -66,6 +92,7 @@ function pearsonItemRows(candidate: ProductPageCandidate, html: string) {
     ...html.matchAll(/<tr\b[^>]*valign\s*=\s*["']?\s*top\s*["']?[^>]*>([\s\S]*?)<\/tr>/gi),
   ]
   const productLine = titleProductLine(html)
+  const imageUrls = pearsonImageUrls(candidate, html)
   const { category, subcategory } = candidateCategory(candidate)
 
   return rows.flatMap((match): ExtractedProductRow[] => {
@@ -107,6 +134,7 @@ function pearsonItemRows(candidate: ProductPageCandidate, html: string) {
       subcategory,
       product_line: productLine,
       product_url: binSku ? skuProductUrl(candidate, binSku) : candidate.url,
+      image_url: imageUrls[0] ?? "",
       pack_size: extractPackSize(name),
       unit_of_measure: "",
       price,
@@ -121,6 +149,7 @@ function pearsonItemRows(candidate: ProductPageCandidate, html: string) {
         reasons: candidate.reasons,
         category,
         subcategory,
+        image_urls: imageUrls,
       },
     }]
   })
@@ -133,6 +162,7 @@ export const pearsonAdapter: SupplierProductAdapter = {
     candidate.distributor.toLowerCase() === "pearson dental",
   extractProduct: (candidate, html) => {
     const product = genericProductExtract(candidate, html)
+    const imageUrls = pearsonImageUrls(candidate, html)
 
     const { category, subcategory } = candidateCategory(candidate)
 
@@ -141,9 +171,11 @@ export const pearsonAdapter: SupplierProductAdapter = {
       name: cleanPearsonName(product.name),
       category,
       subcategory,
+      image_url: imageUrls[0] ?? "",
       raw: {
         ...(typeof product.raw === "object" && product.raw ? product.raw : {}),
         extracted_by: "pearson",
+        image_urls: imageUrls,
       },
     }
   },
