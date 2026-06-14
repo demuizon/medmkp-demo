@@ -8,9 +8,8 @@ const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD
 const PROCESSING_DURATION_MS = 3000;
 const UPLOAD_WIZARD_STEPS = [
   { key: "upload", label: "Upload" },
-  { key: "review", label: "Review" },
   { key: "recommendation", label: "Recommendations" },
-  { key: "submit", label: "Submit" },
+  { key: "savings", label: "Savings" },
 ];
 
 const suppliers = [
@@ -33,9 +32,8 @@ const orderSteps = [
 
 const uploadStepRoutes = {
   upload: "/uploads",
-  review: "/uploads/review",
   recommendation: "/uploads/recommendations",
-  submit: "/uploads/submit",
+  savings: "/uploads/savings",
 };
 
 const routeByView = {
@@ -58,9 +56,9 @@ function viewFromPath(pathname = "/") {
   if (path === "/") return { view: "landing", isLoggedIn: false };
   if (path === "/dashboard") return { view: "landing", isLoggedIn: true };
   if (path === "/uploads") return { view: "upload", isLoggedIn: true, uploadStep: "upload" };
-  if (path === "/uploads/review") return { view: "upload", isLoggedIn: true, uploadStep: "review" };
+  if (path === "/uploads/review") return { view: "upload", isLoggedIn: true, uploadStep: "upload" };
   if (path === "/uploads/recommendations") return { view: "upload", isLoggedIn: true, uploadStep: "recommendation" };
-  if (path === "/uploads/submit") return { view: "upload", isLoggedIn: true, uploadStep: "submit" };
+  if (path === "/uploads/savings") return { view: "upload", isLoggedIn: true, uploadStep: "savings" };
   if (path === "/catalog") return { view: "catalog", isLoggedIn: true };
   if (path === "/admin") return { view: "admin", isLoggedIn: true };
   if (path === "/quotes") return { view: "quote", isLoggedIn: true };
@@ -181,6 +179,12 @@ function IconSprite() {
       <symbol id="icon-arrow-right" viewBox="0 0 24 24">
         <path d="M5 12h14" />
         <path d="m13 6 6 6-6 6" />
+      </symbol>
+      <symbol id="icon-trash" viewBox="0 0 24 24">
+        <path d="M5 7h14" />
+        <path d="M9.5 4.5h5l1 1.5h-7l1-1.5Z" />
+        <path d="M7.5 7.5 8.2 19a1.2 1.2 0 0 0 1.2 1.1h5.2a1.2 1.2 0 0 0 1.2-1.1l.7-11.5" />
+        <path d="M10 10v5M14 10v5" />
       </symbol>
       <symbol id="icon-store" viewBox="0 0 24 24">
         <path d="M4 10.5h16l-1.5-6h-13L4 10.5Z" />
@@ -358,12 +362,10 @@ export default function Home() {
   const [selectedInvoiceName, setSelectedInvoiceName] = useState("");
   const [hasUploadedInvoice, setHasUploadedInvoice] = useState(false);
   const [uploadRailCollapsed, setUploadRailCollapsed] = useState(false);
+  const [uploadItemsEditMode, setUploadItemsEditMode] = useState(false);
   const [neededByDate, setNeededByDate] = useState("");
   const [uploadStep, setUploadStep] = useState("upload");
   const [uploadedDocs, setUploadedDocs] = useState([]);
-  const [showInvoiceSources, setShowInvoiceSources] = useState(false);
-  const [submittingOrder, setSubmittingOrder] = useState(false);
-  const [orderSubmitted, setOrderSubmitted] = useState(false);
   const [draftItems, setDraftItems] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [catalogSource, setCatalogSource] = useState("loading");
@@ -379,7 +381,6 @@ export default function Home() {
       if (nextRoute.view === "upload") {
         const step = nextRoute.uploadStep || "upload";
         setUploadStep(step);
-        if (step !== "submit") setOrderSubmitted(false);
       }
       setMenuOpen(false);
     }
@@ -616,8 +617,8 @@ export default function Home() {
     setRequests((current) => [request, ...current]);
     setSelectedRequestId(request.id);
     setHasUploadedInvoice(true);
-    setOrderSubmitted(false);
-    goToUploadStep("review");
+    setUploadItemsEditMode(false);
+    goToUploadStep("upload");
     setUploadedDocs((docs) => [
       ...docs,
       {
@@ -663,7 +664,7 @@ export default function Home() {
     setUploading(false);
     setSelectedInvoiceName("");
     form.reset();
-    showToast("Invoice matched. Review extracted line items.");
+    showToast("Invoice matched. Edit extracted line items.");
   }
 
   function submitForQuote() {
@@ -672,7 +673,7 @@ export default function Home() {
       return;
     }
 
-    goToUploadStep("review");
+    goToUploadStep("recommendation");
   }
 
   function updateDraftQty(product, nextQty) {
@@ -694,62 +695,6 @@ export default function Home() {
       if (item.product !== product) return item;
       return { ...item, included: false };
     }));
-  }
-
-  function removeUploadedDoc(documentId) {
-    const remainingDocs = uploadedDocs.filter((doc) => doc.id !== documentId);
-    setUploadedDocs(remainingDocs);
-    setDraftItems((items) => {
-      return items
-        .map((item) => {
-          const documentIds = item.documentIds.filter((id) => id !== documentId);
-          const documentQuantities = { ...(item.documentQuantities || {}) };
-          const removedQty = documentQuantities[documentId] || 0;
-          delete documentQuantities[documentId];
-          return {
-            ...item,
-            draftQty: Math.max(1, item.draftQty - removedQty),
-            documentQuantities,
-            documentIds,
-            included: documentIds.length > 0 && item.included,
-          };
-        })
-        .filter((item) => item.documentIds.length > 0);
-    });
-
-    if (!remainingDocs.length) {
-      setHasUploadedInvoice(false);
-      goToUploadStep("upload");
-      setSelectedInvoiceName("");
-      setShowInvoiceSources(false);
-    } else if (uploadStep === "submit") {
-      goToUploadStep("review");
-    }
-  }
-
-  function resetDraftOrder() {
-    setUploadedDocs([]);
-    setDraftItems([]);
-    setHasUploadedInvoice(false);
-    goToUploadStep("upload");
-    setSelectedInvoiceName("");
-    setNeededByDate("");
-    setShowInvoiceSources(false);
-    setSubmittingOrder(false);
-    setOrderSubmitted(false);
-    uploadFormRef.current?.reset();
-  }
-
-  function submitDraftOrder() {
-    if (!activeDraftItems.length || submittingOrder) return;
-
-    setSubmittingOrder(true);
-    window.setTimeout(() => {
-      setSubmittingOrder(false);
-      setOrderSubmitted(true);
-      setOrderStep(2);
-      showToast("Order submitted");
-    }, 900);
   }
 
   const navItems = [
@@ -869,9 +814,7 @@ export default function Home() {
               <div className="wizard-header">
                 <div className="wizard-steps" aria-label="Upload progress">
                   {UPLOAD_WIZARD_STEPS.map((step, index) => {
-                    const currentIndex = orderSubmitted
-                      ? UPLOAD_WIZARD_STEPS.length
-                      : UPLOAD_WIZARD_STEPS.findIndex((candidate) => candidate.key === uploadStep);
+                    const currentIndex = UPLOAD_WIZARD_STEPS.findIndex((candidate) => candidate.key === uploadStep);
                     const stateClass = index < currentIndex ? "done" : index === currentIndex ? "active" : "";
                     return (
                       <span className={stateClass} key={step.key}>
@@ -883,7 +826,7 @@ export default function Home() {
                 </div>
               </div>
 
-              {!orderSubmitted && uploadStep === "upload" && (
+              {uploadStep === "upload" && (
                 <div className={`upload-workspace ${hasUploadedInvoice ? "has-uploaded-invoice" : "empty-workspace"} ${uploadRailCollapsed ? "rail-collapsed" : ""}`}>
                   <form ref={uploadFormRef} onSubmit={handleUpload} className={`upload-layout ${hasUploadedInvoice ? "compact-upload" : ""}`}>
                     <div
@@ -929,49 +872,18 @@ export default function Home() {
                       <input type="hidden" name="preference" value="Exact brand if possible, alternatives allowed" />
                     </div>
 
-                    <div className="upload-fields">
-                      <label><span className="field-label">Supplier name <em>(optional)</em></span>
-                        <select name="supplierName" defaultValue="">
-                          <option value="" disabled>Search or select supplier</option>
-                          <option>Henry Schein</option>
-                          <option>Darby Dental</option>
-                          <option>Dental City</option>
-                        </select>
-                      </label>
-                    </div>
                   </form>
 
-                  {hasUploadedInvoice && visibleDraftItems.length > 0 && (
-                    <section className="extracted-line-preview" aria-labelledby="extractedPreviewHeading">
-                      <div className="extracted-preview-header">
-                        <h3 id="extractedPreviewHeading">Extracted line items preview</h3>
-                        <span>{visibleDraftItems.length} item{visibleDraftItems.length === 1 ? "" : "s"} detected</span>
-                      </div>
-                      <div className="extracted-preview-table">
-                        <div className="extracted-preview-head">
-                          <span>#</span><span>Item description</span><span>SKU / Part #</span><span>Qty</span><span>Unit</span><span>Est. Price</span>
-                        </div>
-                        {visibleDraftItems.slice(0, 6).map((item, index) => (
-                          <div className="extracted-preview-row" key={item.product}>
-                            <span>{index + 1}</span>
-                            <strong>{item.extractedFrom}</strong>
-                            <span>{item.sku || "—"}</span>
-                            <span>{item.draftQty}</span>
-                            <span>{item.unit}</span>
-                            <span>{item.oldUnitPrice ? money.format(item.oldUnitPrice) : "—"}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="extracted-preview-actions">
-                        {visibleDraftItems.length > 6 && (
-                          <button className="secondary-action compact" type="button" onClick={() => goToUploadStep("review")}>
-                            View all {visibleDraftItems.length} items
-                          </button>
-                        )}
-                        <span>Items look wrong?</span>
-                        <button className="secondary-action compact" type="button" onClick={() => setShowInvoiceSources(true)}>Manage sources</button>
-                      </div>
-                    </section>
+                  {hasUploadedInvoice && activeDraftItems.length > 0 && (
+                    <UploadExtractionPanel
+                      items={activeDraftItems}
+                      total={draftPreviousTotal}
+                      editMode={uploadItemsEditMode}
+                      onToggleEditMode={setUploadItemsEditMode}
+                      onQtyChange={updateDraftQty}
+                      onItemChange={updateDraftItem}
+                      onRemove={removeDraftItem}
+                    />
                   )}
 
                   <aside className="upload-help-rail">
@@ -993,14 +905,14 @@ export default function Home() {
                   <div className="upload-submit-bar">
                     <button className="secondary-action compact" type="button" onClick={() => showToast("Draft saved")}>Save draft</button>
                     <button className="primary-action compact" type="button" onClick={submitForQuote} disabled={uploading || !hasUploadedInvoice}>
-                      {uploading ? "Processing..." : "Review extracted items"}
+                      {uploading ? "Processing..." : "Continue to recommendations"}
                       {!uploading && <Icon name="icon-arrow-right" className="button-icon" />}
                     </button>
                   </div>
                 </div>
               )}
 
-              {!orderSubmitted && uploadStep === "recommendation" && (
+              {uploadStep === "recommendation" && (
                 <RecommendationSummary
                   stats={recommendationStats}
                   items={activeDraftItems}
@@ -1009,40 +921,18 @@ export default function Home() {
                   savings={draftSavings}
                   neededByDate={neededByDate}
                   onNeededByDateChange={setNeededByDate}
-                  onBack={() => goToUploadStep("review")}
-                  onContinue={() => goToUploadStep("submit")}
-                />
-              )}
-
-              {!orderSubmitted && uploadStep === "review" && (
-                <DraftOrderReview
-                  items={visibleDraftItems}
-                  total={draftPreviousTotal}
                   onBack={() => goToUploadStep("upload")}
-                  onApprove={() => goToUploadStep("recommendation")}
-                  onRemove={removeDraftItem}
-                  onQtyChange={updateDraftQty}
-                  onItemChange={updateDraftItem}
+                  onContinue={() => goToUploadStep("savings")}
                 />
               )}
 
-              {!orderSubmitted && uploadStep === "submit" && (
-                <DraftOrderConfirm
+              {uploadStep === "savings" && (
+                <SavingsSummary
                   activeItems={activeDraftItems}
                   total={draftTotal}
                   sourceCount={uploadedDocs.length}
                   onBack={() => goToUploadStep("recommendation")}
-                  onSubmit={submitDraftOrder}
-                  submitting={submittingOrder}
-                />
-              )}
-
-              {orderSubmitted && (
-                <DraftOrderSubmitted
-                  activeItems={activeDraftItems}
-                  total={draftTotal}
-                  sourceCount={uploadedDocs.length}
-                  onStartOver={resetDraftOrder}
+                  savings={draftSavings}
                 />
               )}
             </section>
@@ -1229,13 +1119,6 @@ export default function Home() {
       </div>
 
       <div className={`toast ${toast ? "show" : ""}`} role="status" aria-live="polite">{toast}</div>
-      {showInvoiceSources && (
-        <InvoiceSourcesModal
-          docs={uploadedDocs}
-          onClose={() => setShowInvoiceSources(false)}
-          onRemove={removeUploadedDoc}
-        />
-      )}
       <IconSprite />
     </>
   );
@@ -2182,7 +2065,7 @@ function RecommendationSummary({
     return ((b.oldUnitPrice - b.selected.unitPrice) * b.draftQty) - ((a.oldUnitPrice - a.selected.unitPrice) * a.draftQty);
   });
   const summaryCards = [
-    { label: "recommended total", value: money.format(total) },
+    { label: "selected total", value: money.format(total) },
     { label: "estimated savings", value: hasSavings ? money.format(savings) : "None yet" },
     { label: "matched lines", value: `${stats.matchedItems}/${items.length}` },
   ];
@@ -2193,11 +2076,11 @@ function RecommendationSummary({
         <div className="recommendation-header">
           <div>
             <p className="eyebrow">Recommendations</p>
-            <h3 id="recommendationHeading">Confirm recommended winners</h3>
+            <h3 id="recommendationHeading">Review recommended products</h3>
           </div>
           <div className="recommendation-score">
             <strong>{hasSavings ? Math.round((savings / Math.max(previousTotal, 1)) * 100) : 0}%</strong>
-            <span>estimated savings</span>
+            <span>savings vs invoice</span>
           </div>
         </div>
 
@@ -2216,6 +2099,21 @@ function RecommendationSummary({
             const confidence = Math.round((item.recommendation?.confidence || 0) * 100);
             const itemSavings = Math.max((item.oldUnitPrice - item.selected.unitPrice) * item.draftQty, 0);
             const offers = item.recommendation?.offers || [];
+            const selectedOffer = offers.find((offer) => (
+              offer.supplier_name === item.selected.supplier &&
+              (offer.sku || "") === (item.selected.sku || "")
+            )) || {
+              name: item.product,
+              supplier_name: item.selected.supplier,
+              sku: item.selected.sku,
+              comparable_price_cents: Math.round((item.selected.unitPrice || 0) * 100),
+              unit_price_cents: Math.round((item.selected.unitPrice || 0) * 100),
+              product_url: item.selected.product_url,
+            };
+            const remainingOffers = offers.filter((offer) => !(
+              offer.supplier_name === item.selected.supplier &&
+              (offer.sku || "") === (item.selected.sku || "")
+            ));
             const unit = item.unit || "unit";
 
             return (
@@ -2229,29 +2127,31 @@ function RecommendationSummary({
                   </span>
                   <span className="recommendation-meta">
                     {matchType === "unmatched"
-                      ? `Keeping invoice price ${money.format(item.oldUnitPrice)}/${unit} · ${item.draftQty} ${unit}`
-                      : `${item.selected.supplier} · ${money.format(item.selected.unitPrice)}/${unit} · invoice ${money.format(item.oldUnitPrice)} · ${confidence}% confidence · ${item.draftQty} ${unit}`}
+                      ? `No catalog match · keeping invoice price ${money.format(item.oldUnitPrice)}/${unit} · ${item.draftQty} ${unit}`
+                      : `Selected: ${item.selected.supplier} · ${money.format(item.selected.unitPrice)}/${unit} · invoice ${money.format(item.oldUnitPrice)} · ${confidence}% confidence`}
                   </span>
                   <em className={`recommendation-delta ${itemSavings > 0 ? "" : "no-savings"}`}>
                     {itemSavings > 0 ? `Save ${money.format(itemSavings)}` : "—"}
                   </em>
                 </summary>
                 <div className="comparison-list">
+                  <div className="comparison-offer winner">
+                    <strong>Recommended product</strong>
+                    <em>{selectedOffer.supplier_name || "Supplier"} · {selectedOffer.sku || "SKU pending"}</em>
+                    <b>{money.format(offerUnitPrice(selectedOffer))}</b>
+                  </div>
                   <div className="comparison-offer baseline">
-                    <strong>{item.extractedFrom}</strong>
-                    <em>Current invoice · {item.oldVendor}</em>
+                    <strong>Current invoice</strong>
+                    <em>{item.extractedFrom} · {item.oldVendor}</em>
                     <b>{money.format(item.oldUnitPrice)}</b>
                   </div>
-                  {offers.slice(0, 5).map((offer, index) => {
-                    const isWinner = offer.supplier_name === item.selected.supplier && (offer.sku || "") === (item.selected.sku || "");
-                    return (
-                      <div className={`comparison-offer ${isWinner ? "winner" : ""}`} key={`${offer.supplier_name}-${offer.sku || index}`}>
-                        <strong>{offer.name || item.product}</strong>
-                        <em>{offer.supplier_name || "Supplier"} · {offer.sku || "SKU pending"}</em>
-                        <b>{money.format(offerUnitPrice(offer))}</b>
-                      </div>
-                    );
-                  })}
+                  {remainingOffers.slice(0, 4).map((offer, index) => (
+                    <div className="comparison-offer alternative" key={`${offer.supplier_name}-${offer.sku || index}`}>
+                      <strong>{offer.name || item.product}</strong>
+                      <em>{offer.supplier_name || "Supplier"} · {offer.sku || "SKU pending"}</em>
+                      <b>{money.format(offerUnitPrice(offer))}</b>
+                    </div>
+                  ))}
                   {!offers.length && <p>No priced alternatives yet.</p>}
                 </div>
               </details>
@@ -2261,7 +2161,7 @@ function RecommendationSummary({
       </div>
 
       <aside className="recommendation-intent">
-        <p className="eyebrow">Order Intent</p>
+        <p className="eyebrow">Buyer Preferences</p>
         <label>Needed by date
           <span className={`date-field ${neededByDate ? "has-value" : ""}`}>
             <input
@@ -2273,9 +2173,9 @@ function RecommendationSummary({
             />
           </span>
         </label>
-        <label>Order frequency
+        <label>Review cadence
           <select name="frequency" defaultValue="">
-            <option value="" disabled>Select frequency</option>
+            <option value="" disabled>Select cadence</option>
             <option>One-time order</option>
             <option>Monthly</option>
             <option>Every 60 days</option>
@@ -2296,154 +2196,158 @@ function RecommendationSummary({
         </div>
         <div className="wizard-actions">
           <button className="secondary-action compact" type="button" onClick={onBack}>Back</button>
-          <button className="primary-action compact" type="button" onClick={onContinue}>Continue</button>
+          <button className="primary-action compact" type="button" onClick={onContinue}>View savings</button>
         </div>
       </aside>
     </section>
   );
 }
 
-function InvoiceSourcesModal({ docs, onClose, onRemove }) {
+function UploadExtractionPanel({ items, total, editMode, onToggleEditMode, onRemove, onQtyChange, onItemChange }) {
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <section className="modal-panel invoice-sources-modal" role="dialog" aria-modal="true" aria-labelledby="invoiceSourcesHeading" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <div>
-            <p className="eyebrow">Invoice Sources</p>
-            <h3 id="invoiceSourcesHeading">{docs.length} source{docs.length === 1 ? "" : "s"} feeding this draft order</h3>
+    <section className={`extracted-line-preview ${editMode ? "editing" : ""}`} aria-labelledby="extractedPreviewHeading">
+      <div className="extracted-preview-header">
+        <div className="extracted-preview-copy">
+          <h3 id="extractedPreviewHeading">Extracted line items</h3>
+          <p>Review the parsed rows before moving to recommendations.</p>
+        </div>
+        <div className="extracted-preview-header-actions">
+          <div className="extracted-preview-actions">
+            {editMode ? (
+              <button className="text-action edit-link" type="button" onClick={() => onToggleEditMode(false)}>
+                Save
+              </button>
+            ) : (
+              <button className="text-action edit-link" type="button" onClick={() => onToggleEditMode(true)}>
+                Edit
+              </button>
+            )}
           </div>
-          <button className="icon-button" type="button" aria-label="Close invoice sources" onClick={onClose}>×</button>
-        </div>
-        <div className="uploaded-doc-summary">
-          <strong>{docs.reduce((total, doc) => total + doc.itemCount, 0)}</strong>
-          <span>matched lines across uploaded invoices</span>
-        </div>
-        <div className="uploaded-doc-list">
-          {docs.map((doc) => (
-            <article className="uploaded-doc" key={doc.id}>
-              <Icon name="icon-file-text" className="button-icon" />
-              <span>
-                <strong>{doc.name}</strong>
-                <small>{doc.itemCount} matched item{doc.itemCount === 1 ? "" : "s"}</small>
-              </span>
-              <button className="text-action" type="button" onClick={() => onRemove(doc.id)}>Remove</button>
-            </article>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function DraftOrderReview({ items, total, onBack, onApprove, onRemove, onQtyChange, onItemChange }) {
-  return (
-    <div className="draft-review-main">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Review Extraction</p>
-          <h3>Confirm what MedMKP scanned</h3>
-          <p>Fix anything that scanned wrong, then MedMKP builds recommendations.</p>
         </div>
       </div>
 
-      <div className="extraction-table">
-        <div className="extraction-head">
-          <span>Description</span><span>SKU</span><span>Qty</span><span>Unit</span><span>Unit price</span><span>Total</span><span></span>
+      <div className="extracted-preview-table">
+        <div className="extracted-preview-head">
+          <span>#</span>
+          <span>Description</span>
+          <span>SKU / Part #</span>
+          <span>Qty</span>
+          <span>Unit</span>
+          <span>Unit Price</span>
+          <span>Line Total</span>
+          {editMode && <span> </span>}
         </div>
-        {items.map((item) => (
-          <div className={`extraction-row ${item.included ? "" : "removed"}`} key={item.product}>
-            <input
-              aria-label={`${item.product} description`}
-              value={item.extractedFrom}
-              disabled={!item.included}
-              onChange={(event) => onItemChange(item.product, { extractedFrom: event.target.value })}
-            />
-            <input
-              aria-label={`${item.product} SKU`}
-              value={item.sku}
-              disabled={!item.included}
-              onChange={(event) => onItemChange(item.product, { sku: event.target.value })}
-            />
-            <input
-              aria-label={`${item.product} quantity`}
-              min="1"
-              type="number"
-              value={item.draftQty}
-              disabled={!item.included}
-              onChange={(event) => onQtyChange(item.product, event.target.value)}
-            />
-            <input
-              aria-label={`${item.product} unit`}
-              value={item.unit}
-              disabled={!item.included}
-              onChange={(event) => onItemChange(item.product, { unit: event.target.value })}
-            />
-            <input
-              aria-label={`${item.product} unit price`}
-              min="0"
-              step="0.01"
-              type="number"
-              value={item.oldUnitPrice}
-              disabled={!item.included}
-              onChange={(event) => onItemChange(item.product, { oldUnitPrice: Number(event.target.value) || 0 })}
-            />
-            <strong>{item.included ? money.format(item.draftQty * item.oldUnitPrice) : "Removed"}</strong>
-            <button className="text-action" type="button" disabled={!item.included} onClick={() => onRemove(item.product)}>Remove</button>
+        {items.map((item, index) => (
+          <div className="extracted-preview-row" key={item.product}>
+            <span>{index + 1}</span>
+            {editMode ? (
+              <input
+                aria-label={`${item.product} description`}
+                value={item.extractedFrom}
+                onChange={(event) => onItemChange(item.product, { extractedFrom: event.target.value })}
+              />
+            ) : (
+              <strong>{item.extractedFrom}</strong>
+            )}
+            {editMode ? (
+              <input
+                aria-label={`${item.product} SKU`}
+                value={item.sku}
+                onChange={(event) => onItemChange(item.product, { sku: event.target.value })}
+              />
+            ) : (
+              <span>{item.sku || "—"}</span>
+            )}
+            {editMode ? (
+              <input
+                aria-label={`${item.product} quantity`}
+                min="1"
+                type="number"
+                value={item.draftQty}
+                onChange={(event) => onQtyChange(item.product, event.target.value)}
+              />
+            ) : (
+              <span>{item.draftQty}</span>
+            )}
+            {editMode ? (
+              <input
+                aria-label={`${item.product} unit`}
+                value={item.unit}
+                onChange={(event) => onItemChange(item.product, { unit: event.target.value })}
+              />
+            ) : (
+              <span>{item.unit}</span>
+            )}
+            {editMode ? (
+              <input
+                aria-label={`${item.product} unit price`}
+                inputMode="decimal"
+                type="text"
+                value={(Number(item.oldUnitPrice) || 0).toFixed(2)}
+                onChange={(event) => onItemChange(item.product, { oldUnitPrice: Number(event.target.value) || 0 })}
+              />
+            ) : (
+              <span>{item.oldUnitPrice ? money.format(item.oldUnitPrice) : "—"}</span>
+            )}
+            <strong>{money.format(item.draftQty * (item.oldUnitPrice || 0))}</strong>
+            {editMode ? (
+              <button className="icon-button destructive" type="button" aria-label={`Remove ${item.extractedFrom}`} onClick={() => onRemove(item.product)}>
+                <Icon name="icon-trash" className="button-icon" />
+              </button>
+            ) : (
+              <span />
+            )}
           </div>
         ))}
       </div>
 
-      <div className="extraction-footer">
-        <span>Invoice total</span>
+      <div className="extracted-preview-footer">
+        <span>{editMode ? "Edits apply immediately." : "Click edit to adjust rows or remove bad lines."}</span>
         <strong>{money.format(total)}</strong>
       </div>
-
-      <div className="wizard-actions">
-        <button className="secondary-action compact" type="button" onClick={onBack}>Back</button>
-        <button className="primary-action compact" type="button" onClick={onApprove}>Build recommendations</button>
-      </div>
-    </div>
+    </section>
   );
 }
 
-function DraftOrderConfirm({ activeItems, total, sourceCount, onBack, onSubmit, submitting }) {
+function SavingsSummary({ activeItems, total, sourceCount, onBack, savings }) {
+  const savingsByItem = activeItems
+    .map((item) => ({
+      ...item,
+      itemSavings: Math.max((item.oldUnitPrice - item.selected.unitPrice) * item.draftQty, 0),
+      productLink: item.selected?.product_url || item.selected?.url || item.selected?.link || item.recommendation?.offers?.[0]?.url || item.recommendation?.offers?.[0]?.product_url || "",
+    }))
+    .sort((a, b) => b.itemSavings - a.itemSavings);
+
   return (
     <div className="draft-confirm">
       <div>
-        <p className="eyebrow">Submit Order</p>
-        <h3>Order assembled from {sourceCount} invoice{sourceCount === 1 ? "" : "s"}</h3>
-        <p>Review the final total, then submit this order to MedMKP for supplier fulfillment.</p>
+        <p className="eyebrow">Savings</p>
+        <h3>Open the cheaper product links</h3>
+        <p>These are the supplier pages and product links tied to the lower-priced winners for this upload.</p>
       </div>
       <div className="draft-confirm-total">
-        <span>{activeItems.length} active line item{activeItems.length === 1 ? "" : "s"}</span>
+        <span>{activeItems.length} active line item{activeItems.length === 1 ? "" : "s"} from {sourceCount} invoice{sourceCount === 1 ? "" : "s"}</span>
         <strong>{money.format(total)}</strong>
+      </div>
+      <div className="savings-links">
+        {savingsByItem.map((item) => (
+          <article className="savings-link-row" key={item.product}>
+            <div>
+              <strong>{item.extractedFrom}</strong>
+              <p>{item.selected?.supplier || "Supplier"} · {money.format(item.selected?.unitPrice || 0)}/{item.unit || "unit"} · save {money.format(item.itemSavings)}</p>
+            </div>
+            {item.productLink ? (
+              <a className="secondary-action compact" href={item.productLink} target="_blank" rel="noreferrer">Open product</a>
+            ) : (
+              <span className="savings-link-missing">No product link</span>
+            )}
+          </article>
+        ))}
       </div>
       <div className="wizard-actions">
         <button className="secondary-action compact" type="button" onClick={onBack}>Back to recommendations</button>
-        <button className="primary-action compact" type="button" disabled={!activeItems.length || submitting} onClick={onSubmit}>
-          {submitting ? "Submitting..." : "Submit order"}
-        </button>
+        <span className="savings-total">Estimated savings: <strong>{money.format(savings)}</strong></span>
       </div>
-    </div>
-  );
-}
-
-function DraftOrderSubmitted({ activeItems, total, sourceCount, onStartOver }) {
-  return (
-    <div className="draft-submitted">
-      <div className="submitted-mark">
-        <Icon name="icon-clipboard" />
-      </div>
-      <div>
-        <p className="eyebrow">Order Submitted</p>
-        <h3>MedMKP is preparing this order for supplier fulfillment.</h3>
-        <p>{activeItems.length} line item{activeItems.length === 1 ? "" : "s"} from {sourceCount} invoice source{sourceCount === 1 ? "" : "s"} have been submitted.</p>
-      </div>
-      <div className="submitted-summary">
-        <div><span>Estimated total</span><strong>{money.format(total)}</strong></div>
-        <div><span>Status</span><strong>Submitted</strong></div>
-      </div>
-      <button className="primary-action compact" type="button" onClick={onStartOver}>Start another order</button>
     </div>
   );
 }
